@@ -77,7 +77,8 @@ makeRegisterField( 9, "i_out", "Out Current", "A", 0.01)
 makeRegisterField(11, "v_out", "Out Voltage", "V", 0.1)
 makeRegisterField(13, "f_out", "Out Frequency", "Hz", 0.01)
 makeRegisterField(15, "unknown_reg", "Unknown register", "")
-makeRegisterField(20, "wh_daily", "Total Energy Produced", "Wh", 17.35529493) -- FIXME: what kind of scaler is this?
+-- 17.4 has 0 error for value rounded to 10 Wh (same precision as the app) for 25 samples in the range 1 to 149 captured from the cloud upload
+makeRegisterField(20, "wh_daily", "Total Energy Produced", "Wh", 17.4)
 makeRegisterField(22, "temperature", "Temperature", "(unscaled)")
 makeRegisterField(23, "num_inputs", "Num Inputs", "")
 
