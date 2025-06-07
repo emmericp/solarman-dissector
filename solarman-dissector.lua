@@ -55,31 +55,64 @@ fields.modbus_req_unk1      = ProtoField.bytes("solarman.modbus_req.unknown1", "
 fields.modbus_resp_unk1     = ProtoField.bytes("solarman.modbus_resp.unknown", "Unknown", base.SPACE)
 
 
+local function currentPolynomial(current, voltage)
+	return 0.2827571852828381 +
+		9.56729642e-04 * current +
+		-3.14356241e-02 * voltage +
+		-1.47692248e-04 * current^2 +
+		-5.85455772e-05 * current * voltage +
+		1.15441649e-03 * voltage^2 +
+		7.77497736e-09 * current^3 +
+		2.75627365e-05 * current^2 * voltage +
+		9.24460124e-07 * current * voltage^2 +
+		-1.40063110e-05 * voltage^3
+end
+
+local function currentScaler(val, buf, reg)
+	if val == 0 then
+		return 0
+	end
+	local voltage = buf((reg - 5) * 2, 2):uint()
+	return math.max(currentPolynomial(val, voltage * 0.1), 0)
+end
+
+local function temperatureScaler(temp)
+    return
+        2.34855902e-10 * temp^4 +
+        -3.43817238e-07 * temp^3 +
+        1.90923971e-04 * temp^2 +
+        4.94589623e-02 * temp +
+        -20.3634560
+end
 
 local astro_proto = Proto("TM-L800Mi", "Astro Energy TM-L800Mi Register Dumps")
 local astro_reg_decoders = {}
 local function makeRegisterField(reg, name, desc, unit, scaler)
-	scaler = scaler or 1
 	local field = ProtoField.float("solarman.astro" .. name, desc)
 	astro_proto.fields[name] = field
+	local scaleFunc = type(scaler) == "function" and scaler or function(val, buf, ref)
+		return val * (scaler or 1)
+	end
 	---@param buf TvbRange
 	---@param tree TreeItem
 	astro_reg_decoders[#astro_reg_decoders + 1] = function(buf, tree)
 		local data = buf(reg * 2, 2)
-		tree:add(field, data, data:uint() * scaler):append_text(" "):append_text(unit)
+		tree:add(field, data, scaleFunc(data:uint(), buf, reg)):append_text(" "):append_text(unit)
 	end
 end
+
+
 makeRegisterField( 0, "v1", "PV1 Voltage", "V", 0.1)
 makeRegisterField( 1, "v2", "PV2 Voltage", "V", 0.1)
-makeRegisterField( 5, "i1", "PV1 Current", "(unscaled)")
-makeRegisterField( 6, "i2", "PV2 Current", "(unscaled)")
+makeRegisterField( 5, "i1", "PV1 Current", "A", currentScaler)
+makeRegisterField( 6, "i2", "PV2 Current", "A", currentScaler)
 makeRegisterField( 9, "i_out", "Out Current", "A", 0.01)
 makeRegisterField(11, "v_out", "Out Voltage", "V", 0.1)
 makeRegisterField(13, "f_out", "Out Frequency", "Hz", 0.01)
 makeRegisterField(15, "unknown_reg", "Unknown register", "")
 -- 17.4 has 0 error for value rounded to 10 Wh (same precision as the app) for 25 samples in the range 1 to 149 captured from the cloud upload
 makeRegisterField(20, "wh_daily", "Total Energy Produced", "Wh", 17.4)
-makeRegisterField(22, "temperature", "Temperature", "(unscaled)")
+makeRegisterField(22, "temperature", "Temperature", "°C", temperatureScaler)
 makeRegisterField(23, "num_inputs", "Num Inputs", "")
 
 ---@param buf Tvb
